@@ -1,0 +1,37 @@
+<html>
+	<view>
+		<object id="worldSvg" type="image/svg+xml" data="image/world.svg" width="100%" height="100%">
+		</object>
+	</view>
+
+	<script type="text/javascript">
+            var svgObject = document.getElementById("worldSvg");
+            svgObject.addEventListener("load",function(){
+				var svgDoc = svgObject.contentDocument;
+				var svgElement = svgDoc.children[0];
+				var countryPaths = svgElement.children[1].children;
+
+				for(countryPath of countryPaths) {
+					countryPath.style.cursor = "pointer";
+					countryPath.onclick = (function () {
+						const id = countryPath.getAttribute("id");
+						const title = countryPath.getAttribute("title");
+						var thatCountry = countryPath;
+						return function() {
+							thatCountry.style.fill ="blue";
+							console.log('You clicked:', title);
+							const bbox = thatCountry.getBBox();
+							const zoomOut = 50;
+							const viewBox = [
+								bbox.x - zoomOut,
+								bbox.y - zoomOut,
+								bbox.width + zoomOut * 2,
+								bbox.height + zoomOut * 2
+							].join(' ')
+							svgElement.setAttribute("viewBox", viewBox);
+						}
+					})();
+				}
+            }, false);
+        </script>
+</html>

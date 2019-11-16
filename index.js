@@ -2,24 +2,27 @@
     DOM Navigation
 */
 
-const SVG_OBJECT_ID = "worldSvg";
-const AREA_SELECT_ID = "areaSelect";
-const APPLY_BUTTON_ID = "applyButton";
-const SVG_OBJECT_TO_ELEMENT = (svgObjectElement) => svgObjectElement.contentDocument.children[0];
-const SVG_ELEMENT_TO_AREAS = (svgElement) => svgElement.children[1].children;
+const elements = {
+    svgObject: document.getElementById("worldSvg"),
+    guessSelect: document.getElementById("guessSelect"),
+    makeGuessButton: document.getElementById("makeGuessButton"),
+};
+
+const SVG_OBJECT_TO_ELEMENT = (x) => x.contentDocument.children[0];
+const SVG_ELEMENT_TO_AREAS = (x) => x.children[1].children;
 const SVG_PROP_AREA_NAME = "title";
 
-const style = {
+const AREA_GUESS_STATUS_NONE = null;
+const AREA_GUESS_STATUS_RIGHT = true;
+const AREA_GUESS_STATUS_WRONG = false;
+const AREA_NULL = '-- Guess --';
+
+const styles = {
     areaFocusColor: 'gray',
     areaRightColor: 'green',
     areaWrongColor: 'red',
     zoomPadding: 200,
 };
-
-const AREA_GUESS_NONE = null;
-const AREA_GUESS_RIGHT = true;
-const AREA_GUESS_WRONG = false;
-const AREA_NULL = '-- Guess --';
 
 /*
     State
@@ -27,91 +30,81 @@ const AREA_NULL = '-- Guess --';
 
 let svgElement;
 let areas;
-let selectedArea;
-let selectedGuess;
-
-const svgObjectElement = document.getElementById(SVG_OBJECT_ID);
-const areaSelectElement = document.getElementById(AREA_SELECT_ID);
-const applyButtonElement = document.getElementById(APPLY_BUTTON_ID);
-
-const areaGuesses = {};
+let currentArea;
+let currentGuess;
+const guesses = {};
 
 /*
     Init
 */
 
-svgObjectElement.addEventListener("load",function() {
-    init(svgObjectElement);
+elements.svgObject.addEventListener("load",function() {
+    init();
 }, false);
 
-function init(svgObjectElement) {
-    svgElement = SVG_OBJECT_TO_ELEMENT(svgObjectElement);
-    initApplyButton();
+function init() {
+    // Get the <svg> element inside the .svg file.
+    svgElement = SVG_OBJECT_TO_ELEMENT(elements.svgObject);
+
+    // Get the <path> elements that represent the areas.
     areas = Array.from(SVG_ELEMENT_TO_AREAS(svgElement));
-    areas.map(initArea);
-    areaNames = areas.map((area) => area.getAttribute(SVG_PROP_AREA_NAME))
-    setAreaOptions(areaNames);
-    areaSelectElement.onchange = (ev) => {
-        selectedGuess = ev.currentTarget.value;
+    areas.map((area) => {
+        area.style.cursor = "pointer";
+        area.onclick = () => setCurrentArea(area);
+    });
+
+    // Fill the guess combobox with area names.
+    const areaNames = areas.map((area) => area.getAttribute(SVG_PROP_AREA_NAME))
+    elements.guessSelect.innerHTML = [`<option>${AREA_NULL}</option>`].concat(areaNames.map((areaName) => `<option>${areaName}</option>`).join(''));
+    elements.guessSelect.onchange = (ev) => {
+        currentGuess = ev.currentTarget.value;
     }
+
+    elements.makeGuessButton.onclick = () => { makeGuess(); }
 }
 
-function setAreaOptions(values) {
-    areaSelectElement.innerHTML = [`<option>${AREA_NULL}</option>`].concat(values.map((value) => `<option>${value}</option>`).join(''));
-}
+/*
+    Behaviour
+*/
 
-function initApplyButton() {
-    applyButtonElement.onclick = function() {
-        const guess = selectedGuess;
-        const answer = selectedArea.getAttribute(SVG_PROP_AREA_NAME);
+function setCurrentArea(area) {
+    currentArea = area;
 
-        const areaStatus = getAreaStatus(answer);
-        console.log(areaStatus);
-
-        if (areaStatus !== AREA_GUESS_NONE) {
-            console.log('Already guessed! No redos!');
-            return;
-        }
-
-        const correct = guess === answer;
-        const areaGuessStatus = correct ? AREA_GUESS_RIGHT : AREA_GUESS_WRONG;
-        setAreaGuessStatus(selectedArea, areaGuessStatus);
-        console.log(areaGuesses);
-        console.log(selectedGuess);
-        console.log(answer);
-        // console.log(selectedArea);
-        // getAreaStatus
-    }
-}
-
-function initArea(area) {
-    area.style.cursor = "pointer";
-    area.onclick = function() {
-        const areaName = area.getAttribute(SVG_PROP_AREA_NAME);
-        if (getAreaStatus(areaName) === AREA_GUESS_NONE) {
-            area.style.fill = style.areaFocusColor;
-        }
-
-        console.log('You clicked:', areaName);
-        zoomToBBox(area.getBBox(), style.zoomPadding);
-        selectedArea = area;
-    };
-}
-
-function setAreaGuessStatus(area, guessStatus) {
     const areaName = area.getAttribute(SVG_PROP_AREA_NAME);
-    areaGuesses[areaName] = guessStatus;
-    switch (guessStatus) {
-        case AREA_GUESS_RIGHT: area.style.fill = style.areaRightColor; break;
-        case AREA_GUESS_WRONG: area.style.fill = style.areaWrongColor; break;
-        case AREA_GUESS_NONE: area.style.fill = style.areaFocusColor; break;
+    if (getAreaAttemptStatus(areaName) === AREA_GUESS_STATUS_NONE) {
+        area.style.fill = styles.areaFocusColor;
+    }
+
+    console.log('You clicked:', areaName);
+    zoomToBBox(area.getBBox(), styles.zoomPadding);
+}
+
+function makeGuess() {
+    const currentAreaName = currentArea.getAttribute(SVG_PROP_AREA_NAME);
+    if (areaAlreadyAttempted(currentAreaName)) {
+        console.log('Already guessed! No redos!');
+        return;
+    }
+
+    const areaName = currentArea.getAttribute(SVG_PROP_AREA_NAME);
+    const status = currentGuess === currentAreaName ? AREA_GUESS_STATUS_RIGHT : AREA_GUESS_STATUS_WRONG;
+    guesses[areaName] = status;
+
+    switch (status) {
+        case AREA_GUESS_STATUS_RIGHT: currentArea.style.fill = styles.areaRightColor; break;
+        case AREA_GUESS_STATUS_WRONG: currentArea.style.fill = styles.areaWrongColor; break;
+        case AREA_GUESS_STATUS_NONE: currentArea.style.fill = styles.areaFocusColor; break;
     }
 }
 
-function getAreaStatus(areaName) {
-    const areaGuess = areaGuesses[areaName];
-    if (areaGuess === undefined) { return AREA_GUESS_NONE; }
-    return areaName === areaGuess ? AREA_GUESS_RIGHT : AREA_GUESS_WRONG;
+function areaAlreadyAttempted(areaName) {
+    return getAreaAttemptStatus(areaName) !== AREA_GUESS_STATUS_NONE;
+}
+
+function getAreaAttemptStatus(areaName) {
+    const attempt = guesses[areaName];
+    if (attempt === undefined) { return AREA_GUESS_STATUS_NONE; }
+    return areaName === attempt ? AREA_GUESS_STATUS_RIGHT : AREA_GUESS_STATUS_WRONG;
 }
 
 function zoomToBBox(bb, pad) {
